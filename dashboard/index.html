@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AWS Cost Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .chart-container { margin: 20px 0; height: 400px; }
+        .stats { display: flex; justify-content: space-around; margin: 20px 0; }
+        .stat-card { background: #f5f5f5; padding: 20px; border-radius: 5px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AWS Cost Dashboard</h1>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <h3>Total Cost (7 days)</h3>
+                <p id="total-cost">$0.00</p>
+            </div>
+            <div class="stat-card">
+                <h3>Most Expensive Service</h3>
+                <p id="top-service">-</p>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="costChart"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="serviceChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'YOUR_API_GATEWAY_URL/prod/costs'; // Replace with actual URL
+        
+        async function fetchCostData() {
+            try {
+                const response = await fetch(`${API_URL}?days=30`);
+                const data = await response.json();
+                renderCharts(data);
+            } catch (error) {
+                console.error('Error fetching cost data:', error);
+            }
+        }
+
+        function renderCharts(data) {
+            // Process data for charts
+            const dates = Object.keys(data.costs).sort();
+            const dailyTotals = dates.map(date => 
+                data.costs[date].reduce((sum, item) => sum + item.cost, 0)
+            );
+
+            // Service breakdown
+            const serviceCosts = {};
+            Object.values(data.costs).forEach(dayCosts => {
+                dayCosts.forEach(item => {
+                    serviceCosts[item.service] = (serviceCosts[item.service] || 0) + item.cost;
+                });
+            });
+
+            // Update stats
+            const totalCost = dailyTotals.reduce((a, b) => a + b, 0);
+            document.getElementById('total-cost').textContent = `$${totalCost.toFixed(2)}`;
+            
+            const topService = Object.entries(serviceCosts).reduce((a, b) => a[1] > b[1] ? a : b);
+            document.getElementById('top-service').textContent = `${topService[0]} ($${topService[1].toFixed(2)})`;
+
+            // Daily cost chart
+            new Chart(document.getElementById('costChart'), {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Daily Cost',
+                        data: dailyTotals,
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                }
+            });
+
+            // Service breakdown chart
+            new Chart(document.getElementById('serviceChart'), {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(serviceCosts),
+                    datasets: [{
+                        data: Object.values(serviceCosts),
+                        backgroundColor: Object.keys(serviceCosts).map(() => 
+                            `hsl(${Math.random() * 360}, 70%, 50%)`
+                        )
+                    }]
+                }
+            });
+        }
+
+        // Load data when page loads
+        fetchCostData();
+    </script>
+</body>
+</html>
